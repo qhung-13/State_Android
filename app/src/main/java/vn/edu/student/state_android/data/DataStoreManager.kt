@@ -1,6 +1,8 @@
 package vn.edu.student.state_android.data
 
+import android.content.ContentValues.TAG
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -36,13 +38,16 @@ class DataStoreManager(private val context: Context) {
 
     suspend fun setNote(value: String) {
         context.dataStore.edit { it[Keys.NOTE] = value }
+        Log.d(TAG, "Mechanism = DataStore | note changed to $value")
     }
 
     suspend fun setCounter(value: Int) {
         context.dataStore.edit { it[Keys.COUNTER] = value }
+        Log.d(TAG, "Mechanism = DataStore | counter changed to $value")
     }
 
     suspend fun setChoice(value: String) {
         context.dataStore.edit { it[Keys.CHOICE] = value }
+        Log.d(TAG, "Mechanism = DataStore | choice changed to $value")
     }
 }
