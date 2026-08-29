@@ -1,5 +1,6 @@
 package vn.edu.student.state_android.ui.screens
 
+import android.os.Process
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,141 +11,365 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import vn.edu.student.state_android.data.DataStoreManager
 import vn.edu.student.state_android.model.LabState
 import vn.edu.student.state_android.model.StateMechanism
+import vn.edu.student.state_android.ui.DestinationLifecycleLogger
 import vn.edu.student.state_android.ui.components.CurrentStateCard
 import vn.edu.student.state_android.ui.components.MechanismSelector
 import vn.edu.student.state_android.ui.components.StateInputCard
 import vn.edu.student.state_android.ui.components.TestActionsCard
 import vn.edu.student.state_android.viewmodel.StateViewModel
-import kotlinx.coroutines.launch
 
 private const val TAG = "STATE_LAB"
 
 @Composable
-fun StateLabScreen(onNavigateToSecondScreen: () -> Unit) {
+fun StateLabScreen(
+    onGoToSecondScreen: () -> Unit,
+    stateViewModel: StateViewModel = viewModel()
+) {
 
-    // Which mechanism is currently selected for viewing/editing.
-    // The selector itself only needs to survive recomposition, so `remember` is enough.
-    var mechanism by remember { mutableStateOf(StateMechanism.VIEW_MODEL) }
+    DestinationLifecycleLogger(
+        screenName = "StateLabScreen"
+    )
 
-    // ---------- 1) remember ----------
-    var rememberNote by remember { mutableStateOf("") }
-    var rememberCounter by remember { mutableStateOf(0) }
-    var rememberChoice by remember { mutableStateOf("A") }
-
-    // ---------- 2) rememberSaveable ----------
-    var saveableNote by rememberSaveable { mutableStateOf("") }
-    var saveableCounter by rememberSaveable { mutableStateOf(0) }
-    var saveableChoice by rememberSaveable { mutableStateOf("A") }
-
-    // ---------- 3 & 4) ViewModel + SavedStateHandle ----------
-    // viewModel() resolves to the current NavBackStackEntry's ViewModelStoreOwner,
-    // so this instance is scoped to the "state_lab" destination in the back stack.
-    val stateViewModel: StateViewModel = viewModel()
-
-    // ---------- 5) DataStore ----------
     val context = LocalContext.current
-    val dataStoreManager = remember { DataStoreManager(context) }
     val scope = rememberCoroutineScope()
-    val dataStoreState by dataStoreManager.state.collectAsState(initial = LabState())
 
-    // Recomposition trigger — deliberately NOT tied to any of the 5 mechanisms above,
-    // so it can force a recomposition without disturbing the state under test.
-    var recompositionCount by remember { mutableStateOf(0) }
+    var mechanismName by rememberSaveable {
+        mutableStateOf(StateMechanism.REMEMBER.name)
+    }
 
-    val (currentNote, currentCounter, currentChoice) = when (mechanism) {
-        StateMechanism.REMEMBER -> Triple(rememberNote, rememberCounter, rememberChoice)
-        StateMechanism.REMEMBER_SAVEABLE -> Triple(saveableNote, saveableCounter, saveableChoice)
-        StateMechanism.VIEW_MODEL -> Triple(stateViewModel.vmNote, stateViewModel.vmCounter, stateViewModel.vmChoice)
-        StateMechanism.SAVED_STATE_HANDLE -> Triple(stateViewModel.shNote, stateViewModel.shCounter, stateViewModel.shChoice)
-        StateMechanism.DATA_STORE -> Triple(dataStoreState.note, dataStoreState.counter, dataStoreState.choice)
+    val mechanism = StateMechanism.valueOf(
+        mechanismName
+    )
+
+    var rememberNote by remember {
+        mutableStateOf("")
+    }
+
+    var rememberCounter by remember {
+        mutableIntStateOf(0)
+    }
+
+    var rememberChoice by remember {
+        mutableStateOf("A")
+    }
+
+    var saveableNote by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    var saveableCounter by rememberSaveable {
+        mutableIntStateOf(0)
+    }
+
+    var saveableChoice by rememberSaveable {
+        mutableStateOf("A")
+    }
+
+    val dataStoreManager = remember(
+        context.applicationContext
+    ) {
+        DataStoreManager(
+            context.applicationContext
+        )
+    }
+
+    val dataStoreState by dataStoreManager.state.collectAsState(
+        initial = LabState()
+    )
+
+    var recompositionTriggerCount by remember {
+        mutableIntStateOf(0)
+    }
+
+    val compositionPassCounter = remember {
+        intArrayOf(0)
+    }
+
+    SideEffect {
+
+        compositionPassCounter[0]++
+
+        Log.d(
+            TAG,
+            "COMPOSITION | StateLabScreen completed | " +
+                    "pass=${compositionPassCounter[0]} | " +
+                    "mechanism=${mechanism.label}"
+        )
+    }
+
+    val currentNote: String
+    val currentCounter: Int
+    val currentChoice: String
+
+    when (mechanism) {
+
+        StateMechanism.REMEMBER -> {
+            currentNote = rememberNote
+            currentCounter = rememberCounter
+            currentChoice = rememberChoice
+        }
+
+        StateMechanism.REMEMBER_SAVEABLE -> {
+            currentNote = saveableNote
+            currentCounter = saveableCounter
+            currentChoice = saveableChoice
+        }
+
+        StateMechanism.VIEW_MODEL -> {
+            currentNote = stateViewModel.vmNote
+            currentCounter = stateViewModel.vmCounter
+            currentChoice = stateViewModel.vmChoice
+        }
+
+        StateMechanism.SAVED_STATE_HANDLE -> {
+            currentNote = stateViewModel.shNote
+            currentCounter = stateViewModel.shCounter
+            currentChoice = stateViewModel.shChoice
+        }
+
+        StateMechanism.DATA_STORE -> {
+            currentNote = dataStoreState.note
+            currentCounter = dataStoreState.counter
+            currentChoice = dataStoreState.choice
+        }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        Column {
-            Text("State Survival Lab", style = MaterialTheme.typography.headlineSmall)
-            Text("Test Android State Lifecycle", style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Column {
-            Text("MECHANISM", style = MaterialTheme.typography.labelMedium)
-            MechanismSelector(
-                selected = mechanism,
-                onSelected = {
-                    mechanism = it
-                    Log.d(TAG, "Mechanism = ${it.label}")
-                }
+            .verticalScroll(
+                rememberScrollState()
             )
-            Text("Testing: ${mechanism.label}", style = MaterialTheme.typography.bodyMedium)
-        }
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(
+            16.dp
+        )
+    ) {
+
+        Text(
+            text = "State Survival Lab",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        Text(
+            text = "How long does Android state survive?",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        MechanismSelector(
+            selected = mechanism,
+            onSelected = { selectedMechanism ->
+
+                mechanismName =
+                    selectedMechanism.name
+
+                Log.d(
+                    TAG,
+                    "MECHANISM | selected=${selectedMechanism.label}"
+                )
+            }
+        )
 
         StateInputCard(
             note = currentNote,
-            onNoteChange = { newValue ->
-                when (mechanism) {
-                    StateMechanism.REMEMBER -> rememberNote = newValue
-                    StateMechanism.REMEMBER_SAVEABLE -> saveableNote = newValue
-                    StateMechanism.VIEW_MODEL -> stateViewModel.setVmNote(newValue)
-                    StateMechanism.SAVED_STATE_HANDLE -> stateViewModel.setShNote(newValue)
-                    StateMechanism.DATA_STORE -> scope.launch { dataStoreManager.setNote(newValue) }
-                }
-            },
             counter = currentCounter,
-            onIncrement = {
-                when (mechanism) {
-                    StateMechanism.REMEMBER -> {
-                        rememberCounter++
-                        Log.d(TAG, "Mechanism = remember | counter changed to $rememberCounter")
-                    }
-                    StateMechanism.REMEMBER_SAVEABLE -> {
-                        saveableCounter++
-                        Log.d(TAG, "Mechanism = rememberSaveable | counter changed to $saveableCounter")
-                    }
-                    StateMechanism.VIEW_MODEL -> stateViewModel.incrementVmCounter()
-                    StateMechanism.SAVED_STATE_HANDLE -> stateViewModel.incrementShCounter()
-                    StateMechanism.DATA_STORE -> scope.launch {
-                        dataStoreManager.setCounter(dataStoreState.counter + 1)
-                    }
-                }
-            },
-            onDecrement = {
-                when (mechanism) {
-                    StateMechanism.REMEMBER -> rememberCounter = (rememberCounter - 1).coerceAtLeast(0)
-                    StateMechanism.REMEMBER_SAVEABLE -> saveableCounter = (saveableCounter - 1).coerceAtLeast(0)
-                    StateMechanism.VIEW_MODEL -> stateViewModel.decrementVmCounter()
-                    StateMechanism.SAVED_STATE_HANDLE -> stateViewModel.decrementShCounter()
-                    StateMechanism.DATA_STORE -> scope.launch {
-                        dataStoreManager.setCounter((dataStoreState.counter - 1).coerceAtLeast(0))
-                    }
-                }
-            },
             choice = currentChoice,
-            onChoiceChange = { newValue ->
+
+            onNoteChange = { newValue ->
+
                 when (mechanism) {
-                    StateMechanism.REMEMBER -> rememberChoice = newValue
-                    StateMechanism.REMEMBER_SAVEABLE -> saveableChoice = newValue
-                    StateMechanism.VIEW_MODEL -> stateViewModel.setVmChoice(newValue)
-                    StateMechanism.SAVED_STATE_HANDLE -> stateViewModel.setShChoice(newValue)
-                    StateMechanism.DATA_STORE -> scope.launch { dataStoreManager.setChoice(newValue) }
+
+                    StateMechanism.REMEMBER -> {
+
+                        rememberNote = newValue
+
+                        Log.d(
+                            TAG,
+                            "remember | note=\"$newValue\""
+                        )
+                    }
+
+                    StateMechanism.REMEMBER_SAVEABLE -> {
+
+                        saveableNote = newValue
+
+                        Log.d(
+                            TAG,
+                            "rememberSaveable | note=\"$newValue\""
+                        )
+                    }
+
+                    StateMechanism.VIEW_MODEL -> {
+                        stateViewModel.updateVmNote(
+                            newValue
+                        )
+                    }
+
+                    StateMechanism.SAVED_STATE_HANDLE -> {
+                        stateViewModel.updateShNote(
+                            newValue
+                        )
+                    }
+
+                    StateMechanism.DATA_STORE -> {
+
+                        scope.launch {
+                            dataStoreManager.setNote(
+                                newValue
+                            )
+                        }
+                    }
+                }
+            },
+
+            onIncrement = {
+
+                when (mechanism) {
+
+                    StateMechanism.REMEMBER -> {
+
+                        rememberCounter++
+
+                        Log.d(
+                            TAG,
+                            "remember | counter=$rememberCounter"
+                        )
+                    }
+
+                    StateMechanism.REMEMBER_SAVEABLE -> {
+
+                        saveableCounter++
+
+                        Log.d(
+                            TAG,
+                            "rememberSaveable | counter=$saveableCounter"
+                        )
+                    }
+
+                    StateMechanism.VIEW_MODEL -> {
+                        stateViewModel.incrementVmCounter()
+                    }
+
+                    StateMechanism.SAVED_STATE_HANDLE -> {
+                        stateViewModel.incrementShCounter()
+                    }
+
+                    StateMechanism.DATA_STORE -> {
+
+                        scope.launch {
+                            dataStoreManager.incrementCounter()
+                        }
+                    }
+                }
+            },
+
+            onDecrement = {
+
+                when (mechanism) {
+
+                    StateMechanism.REMEMBER -> {
+
+                        rememberCounter =
+                            (rememberCounter - 1)
+                                .coerceAtLeast(0)
+
+                        Log.d(
+                            TAG,
+                            "remember | counter=$rememberCounter"
+                        )
+                    }
+
+                    StateMechanism.REMEMBER_SAVEABLE -> {
+
+                        saveableCounter =
+                            (saveableCounter - 1)
+                                .coerceAtLeast(0)
+
+                        Log.d(
+                            TAG,
+                            "rememberSaveable | counter=$saveableCounter"
+                        )
+                    }
+
+                    StateMechanism.VIEW_MODEL -> {
+                        stateViewModel.decrementVmCounter()
+                    }
+
+                    StateMechanism.SAVED_STATE_HANDLE -> {
+                        stateViewModel.decrementShCounter()
+                    }
+
+                    StateMechanism.DATA_STORE -> {
+
+                        scope.launch {
+                            dataStoreManager.decrementCounter()
+                        }
+                    }
+                }
+            },
+
+            onChoiceChange = { newChoice ->
+
+                when (mechanism) {
+
+                    StateMechanism.REMEMBER -> {
+
+                        rememberChoice = newChoice
+
+                        Log.d(
+                            TAG,
+                            "remember | choice=$newChoice"
+                        )
+                    }
+
+                    StateMechanism.REMEMBER_SAVEABLE -> {
+
+                        saveableChoice = newChoice
+
+                        Log.d(
+                            TAG,
+                            "rememberSaveable | choice=$newChoice"
+                        )
+                    }
+
+                    StateMechanism.VIEW_MODEL -> {
+                        stateViewModel.updateVmChoice(
+                            newChoice
+                        )
+                    }
+
+                    StateMechanism.SAVED_STATE_HANDLE -> {
+                        stateViewModel.updateShChoice(
+                            newChoice
+                        )
+                    }
+
+                    StateMechanism.DATA_STORE -> {
+
+                        scope.launch {
+                            dataStoreManager.setChoice(
+                                newChoice
+                            )
+                        }
+                    }
                 }
             }
         )
@@ -156,13 +381,81 @@ fun StateLabScreen(onNavigateToSecondScreen: () -> Unit) {
             choice = currentChoice
         )
 
+        Text(
+            text =
+                "Debug: PID=${Process.myPid()} | " +
+                        "ViewModel ID=${stateViewModel.instanceId}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         TestActionsCard(
-            recompositionCount = recompositionCount,
+            recompositionCount =
+                recompositionTriggerCount,
+
             onTriggerRecomposition = {
-                recompositionCount++
-                Log.d(TAG, "Recomposition triggered, count = $recompositionCount")
+
+                recompositionTriggerCount++
+
+                Log.d(
+                    TAG,
+                    "TEST | Trigger Recomposition | " +
+                            "count=$recompositionTriggerCount | " +
+                            "mechanism=${mechanism.label}"
+                )
             },
-            onGoToSecondScreen = onNavigateToSecondScreen
+
+            onGoToSecondScreen = {
+
+                Log.d(
+                    TAG,
+                    "NAVIGATION | Leaving StateLabScreen | " +
+                            "mechanism=${mechanism.label}"
+                )
+
+                onGoToSecondScreen()
+            },
+
+            onResetState = {
+
+                when (mechanism) {
+
+                    StateMechanism.REMEMBER -> {
+
+                        rememberNote = ""
+                        rememberCounter = 0
+                        rememberChoice = "A"
+                    }
+
+                    StateMechanism.REMEMBER_SAVEABLE -> {
+
+                        saveableNote = ""
+                        saveableCounter = 0
+                        saveableChoice = "A"
+                    }
+
+                    StateMechanism.VIEW_MODEL -> {
+                        stateViewModel.resetVmState()
+                    }
+
+                    StateMechanism.SAVED_STATE_HANDLE -> {
+                        stateViewModel.resetShState()
+                    }
+
+                    StateMechanism.DATA_STORE -> {
+
+                        scope.launch {
+                            dataStoreManager.reset()
+                        }
+                    }
+                }
+
+                Log.d(
+                    TAG,
+                    "TEST | Reset state | " +
+                            "mechanism=${mechanism.label}"
+                )
+            }
         )
     }
 }

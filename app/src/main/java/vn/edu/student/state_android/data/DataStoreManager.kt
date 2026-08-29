@@ -1,53 +1,117 @@
 package vn.edu.student.state_android.data
 
-import android.content.ContentValues.TAG
 import android.content.Context
 import android.util.Log
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import vn.edu.student.state_android.model.LabState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import vn.edu.student.state_android.model.LabState
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "state_lab_prefs")
+private const val TAG = "STATE_LAB"
 
-/**
- * DataStore is the only mechanism in this lab that is real persistence:
- * it survives recomposition, rotation, navigation, Activity recreation,
- * AND process death, because it is written to disk, not to memory or a Bundle.
- */
-class DataStoreManager(private val context: Context) {
+private val Context.dataStore by preferencesDataStore(
+    name = "state_survival_lab_preferences"
+)
+
+class DataStoreManager(
+    private val context: Context
+) {
 
     private object Keys {
-        val NOTE = stringPreferencesKey("ds_note")
-        val COUNTER = intPreferencesKey("ds_counter")
-        val CHOICE = stringPreferencesKey("ds_choice")
+        val NOTE = stringPreferencesKey("note")
+        val COUNTER = intPreferencesKey("counter")
+        val CHOICE = stringPreferencesKey("choice")
     }
 
-    val state: Flow<LabState> = context.dataStore.data.map { prefs ->
+    val state: Flow<LabState> = context.dataStore.data.map { preferences ->
+
         LabState(
-            note = prefs[Keys.NOTE] ?: "",
-            counter = prefs[Keys.COUNTER] ?: 0,
-            choice = prefs[Keys.CHOICE] ?: "A"
+            note = preferences[Keys.NOTE] ?: "",
+            counter = preferences[Keys.COUNTER] ?: 0,
+            choice = preferences[Keys.CHOICE] ?: "A"
         )
     }
 
     suspend fun setNote(value: String) {
-        context.dataStore.edit { it[Keys.NOTE] = value }
-        Log.d(TAG, "Mechanism = DataStore | note changed to $value")
+
+        context.dataStore.edit { preferences ->
+            preferences[Keys.NOTE] = value
+        }
+
+        Log.d(
+            TAG,
+            "DataStore | note changed to \"$value\""
+        )
     }
 
-    suspend fun setCounter(value: Int) {
-        context.dataStore.edit { it[Keys.COUNTER] = value }
-        Log.d(TAG, "Mechanism = DataStore | counter changed to $value")
+    suspend fun incrementCounter() {
+
+        var newValue = 0
+
+        context.dataStore.edit { preferences ->
+
+            val currentValue =
+                preferences[Keys.COUNTER] ?: 0
+
+            newValue = currentValue + 1
+
+            preferences[Keys.COUNTER] = newValue
+        }
+
+        Log.d(
+            TAG,
+            "DataStore | counter changed to $newValue"
+        )
+    }
+
+    suspend fun decrementCounter() {
+
+        var newValue = 0
+
+        context.dataStore.edit { preferences ->
+
+            val currentValue =
+                preferences[Keys.COUNTER] ?: 0
+
+            newValue =
+                (currentValue - 1).coerceAtLeast(0)
+
+            preferences[Keys.COUNTER] = newValue
+        }
+
+        Log.d(
+            TAG,
+            "DataStore | counter changed to $newValue"
+        )
     }
 
     suspend fun setChoice(value: String) {
-        context.dataStore.edit { it[Keys.CHOICE] = value }
-        Log.d(TAG, "Mechanism = DataStore | choice changed to $value")
+
+        context.dataStore.edit { preferences ->
+            preferences[Keys.CHOICE] = value
+        }
+
+        Log.d(
+            TAG,
+            "DataStore | choice changed to $value"
+        )
+    }
+
+    suspend fun reset() {
+
+        context.dataStore.edit { preferences ->
+
+            preferences[Keys.NOTE] = ""
+            preferences[Keys.COUNTER] = 0
+            preferences[Keys.CHOICE] = "A"
+        }
+
+        Log.d(
+            TAG,
+            "DataStore | state reset"
+        )
     }
 }
